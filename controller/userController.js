@@ -7,8 +7,39 @@ const UserOTPs = require("../models/verifyOTP");
 require("dotenv").config();
 
 const loginUser = async (req, res) => {
-  const { email, password } = req.body;
-  console.log(email, password);
+  const { email, password, token } = req.body;
+  if (token) {
+    const decode = jwt.decode(token);
+    const time = new Date() / 1000;
+    const { userId, exp } = decode;
+    if (time > exp) {
+      return res.status(401).json({ status: "fail", message: "login Again" });
+    }
+    try {
+      const user = await Users.findById(userId);
+      if (user) {
+        const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
+          expiresIn: "1h",
+        });
+        return res.status(200).json({
+          status: "Success",
+          token,
+          data: user,
+        });
+      } else {
+        res.status(404).json({
+          message: "Email with this email does not exist !!",
+          status: "fail",
+        });
+      }
+    } catch (error) {
+      return res.status(404).json({
+        status: "fail",
+        message: error,
+      });
+    }
+    console.log(decode, "decoded");
+  }
   if (!email || !password)
     return res.status(401).json({
       status: "fail",
