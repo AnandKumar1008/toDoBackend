@@ -5,41 +5,10 @@ const nodemailer = require("nodemailer");
 const randomstring = require("randomstring");
 const UserOTPs = require("../models/verifyOTP");
 require("dotenv").config();
-
+// this is for the login section
 const loginUser = async (req, res) => {
-  const { email, password, token } = req.body;
-  if (token) {
-    const decode = jwt.decode(token);
-    const time = new Date() / 1000;
-    const { userId, exp } = decode;
-    if (time > exp) {
-      return res.status(401).json({ status: "fail", message: "login Again" });
-    }
-    try {
-      const user = await Users.findById(userId);
-      if (user) {
-        const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
-          expiresIn: "1h",
-        });
-        return res.status(200).json({
-          status: "Success",
-          token,
-          data: user,
-        });
-      } else {
-        res.status(404).json({
-          message: "Email with this email does not exist !!",
-          status: "fail",
-        });
-      }
-    } catch (error) {
-      return res.status(404).json({
-        status: "fail",
-        message: error,
-      });
-    }
-    console.log(decode, "decoded");
-  }
+  const { email, password } = req.body;
+
   if (!email || !password)
     return res.status(401).json({
       status: "fail",
@@ -47,7 +16,7 @@ const loginUser = async (req, res) => {
     });
   try {
     const user = await Users.findOne({ email });
-    console.log(user);
+
     if (user) {
       const isCorrect = bcrypt.compareSync(password, user.password);
       console.log(isCorrect);
@@ -79,9 +48,9 @@ const loginUser = async (req, res) => {
     });
   }
 };
+
 //sign up login is here
 
-//
 const saltRounds = 10;
 const signupUser = async (req, res) => {
   const { email, password, name, role, otpID } = req.body;
@@ -93,11 +62,6 @@ const signupUser = async (req, res) => {
       status: "fail",
     });
   }
-  // const isOTPsend = await OTPs.findById();
-
-  //   console.log(isOTPsend);
-  // if(!isOTPsend||!isOTPsend.length)
-  //   verify();
 
   const salt = bcrypt.genSaltSync(saltRounds);
   const hashedPassword = bcrypt.hashSync(password, salt);
@@ -120,6 +84,108 @@ const signupUser = async (req, res) => {
     res.status(404).json({
       status: "fail",
       message: "Something went wrong",
+    });
+  }
+};
+
+// this is for the firebase login
+const firebaseLogin = async (req, res) => {
+  const { email, name, userPhoto } = req.body;
+  try {
+    const user = await Users.findOne({ email });
+    if (user) {
+      await Users.findByIdAndUpdate(
+        user._id,
+        { $set: { login: true } },
+        { new: true }
+      );
+      const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+        expiresIn: "1h",
+      });
+      return res.status(200).json({
+        status: "success",
+        data: user,
+        token,
+      });
+    }
+    const newUser = await Users.create({
+      email,
+      name,
+      userPhoto,
+      login: true,
+      password: userPhoto,
+    });
+    const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, {
+      expiresIn: "1h",
+    });
+    res.status(200).json({ status: "success", data: newUser, token: token });
+  } catch (error) {
+    console.log(error);
+    res.status(400).json({
+      status: "success",
+      message: error,
+    });
+  }
+};
+// here checking for the token
+const checkToken = async (req, res) => {
+  const { token } = req.body;
+  try {
+    let decode = "";
+
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET,
+      (err, decoded) => {
+        if (err) {
+          console.error("JWT verification failed:", err);
+        } else {
+        }
+        decode = decoded;
+      }
+    );
+
+    const { id } = decode;
+    const user = await Users.findById(id);
+    if (user.login) {
+      return res.status(200).json({
+        status: "success",
+        data: user,
+      });
+    }
+    res.status(400).json({
+      status: "fail",
+      message: "Please login First",
+    });
+  } catch (error) {
+    res.status(400).json({
+      status: "fail",
+      message: "Something went wrong",
+    });
+  }
+};
+
+//make user logged out
+const logout = async (req, res) => {
+  const { userId } = req.body;
+
+  try {
+    const user = await Users.findByIdAndUpdate(
+      userId,
+      {
+        $set: { login: false },
+      },
+      { new: true }
+    );
+
+    res.status(200).json({
+      status: "success",
+      message: "logout successful",
+    });
+  } catch (error) {
+    res.status(400).json({
+      status: "fail",
+      message: error,
     });
   }
 };
@@ -164,7 +230,6 @@ function sendOTP(email, otp) {
 }
 
 //Verification Part is not done yet
-
 const verifyAccount = async (req, res) => {
   const { email } = req.body;
   console.log(email);
@@ -203,4 +268,11 @@ const verifyAccount = async (req, res) => {
 
 //
 
-module.exports = { signupUser, loginUser, verifyAccount };
+module.exports = {
+  signupUser,
+  loginUser,
+  verifyAccount,
+  firebaseLogin,
+  checkToken,
+  logout,
+};

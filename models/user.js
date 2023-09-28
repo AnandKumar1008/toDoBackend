@@ -13,10 +13,18 @@ const userSchema = mongoose.Schema(
       type: String,
       required: true,
     },
+    userPhoto: {
+      type: String,
+      default: "",
+    },
     role: {
       type: String,
       enum: ["user", "admin", "superAdmin"],
       default: "user",
+    },
+    login: {
+      type: Boolean,
+      default: false,
     },
   },
   {
